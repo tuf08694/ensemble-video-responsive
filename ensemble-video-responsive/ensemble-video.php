@@ -1,231 +1,116 @@
 <?php
-
 /*
 Plugin Name: Ensemble Video Responsive Plugin
 Description: Easily embed Ensemble Videos in your site. This version includes responsive embed codes and several embedding options.
 Version: 5.6.4
 */
 
-
 class Ensemble_Video {
-	// constructor
-	function __construct() {
 
-		add_action( 'wp_enqueue_scripts', array( &$this, 'admin_enqueue_scripts' ) );
+    // Constructor
+    public function __construct() {
+        add_action( 'wp_enqueue_scripts', array( $this, 'enqueue_scripts' ) );
+        add_shortcode( 'ensemblevideo', array( $this, 'ensemblevideo_shortcode' ) );
 
-		$this->enqueue_ensemble_styles();
-
-		// add our shortcode
-		add_shortcode( 'ensemblevideo', array( &$this, 'ensemblevideo_shortcode' ) );
-
-		// set default options
-		if ( get_site_option( 'ensemble_video' ) === false ) {
-			if ( $this->is_network_activated() ) {
-				update_site_option( 'ensemble_video', $this->default_options() );
-			} else {
-				update_option( 'ensemble_video', $this->default_options() );
-			}
-		}
-
-		if ( is_admin() ) {
-			// add media button
-			add_action( 'media_buttons_context', array( &$this, 'add_media_button' ), 999 );
-			// add media button scripts and styles
-			add_action( 'admin_enqueue_scripts', array( &$this, 'admin_enqueue_scripts' ) );
-
-			// add admin page
-			add_action( 'admin_menu', array( &$this, 'admin_menu' ) );
-			add_action( 'admin_init', array( &$this, 'admin_init' ) );
-
-			// add network admin page
-			add_action( 'network_admin_menu', array( &$this, 'admin_menu' ) );
-			// save settings for network admin
-			add_action( 'network_admin_edit_ensemble_video', array( &$this, 'save_network_settings' ) );
-			// return message for update settings
-			add_action( 'network_admin_notices', array( &$this, 'network_admin_notices' ) );
-		}
-	}
-
-	function is_network_activated() {
-		// Makes sure the plugin is defined before trying to use it
-		if ( ! function_exists( 'is_plugin_active_for_network' ) ) {
-			require_once( ABSPATH . '/wp-admin/includes/plugin.php' );
-		}
-
-		return is_multisite() && is_plugin_active_for_network( plugin_basename( __FILE__ ) );
-	}
-
-	function default_options() {
-		return array(
-			'ensemble_url'              => 'https://demo.ensemblevideo.com',
-			'ensemble_base_url'         => '',
-			'ensemble_institution_guid' => '',
-			'ensemble_version'          => ''
-#			'ensemble_institution_name' => ''
-		);
-	}
-
-	function enqueue_ensemble_styles() {
-		// For ensemble version 5.3 and below
-		wp_enqueue_style( 'ensemble-styles', plugins_url( '/css/ensemble.css', __FILE__ ) );
-		//  For ensemble version 5.4 and above
-		wp_enqueue_style( 'ensemble-video-styles', plugins_url( '/css/ensemble-video.css', __FILE__ ) );
-	}
-
-	function admin_enqueue_scripts() {
-		// TODO: restrict to pages with post editor
-		wp_enqueue_style( 'ensemble-styles', plugins_url( '/css/ensemble.css', __FILE__ ) );
-		//  For ensemble version 5.4 and above
-		wp_enqueue_style( 'ensemble-video-styles', plugins_url( '/css/ensemble-video.css', __FILE__ ) );
-		// For ensemble version 5.3 and below
-		wp_enqueue_script( 'ensemble-video', plugins_url( '/js/ensemble-video-5-3.js', __FILE__ ), array('jquery') );
-		//  For ensemble version 5.4 and above
-		wp_enqueue_script( 'ev-embedder', plugins_url( '/js/ev-embedder.js', __FILE__ ), array('jquery') );
-
-		$options        = $this->get_options();
-		$bindingsToPass = array(
-			'ensemble_url'              => $options['ensemble_url'],
-			'ensemble_base_url'         => $options['ensemble_base_url'],
-			'ensemble_institution_guid' => $options['ensemble_institution_guid'],
-			'ensemble_version'          => $options['ensemble_version']
-#			'ensemble_institution_name' => $options['ensemble_institution_name']
-		);
-		$dataToPass     = array(
-			'keys' => $bindingsToPass
-		);
-		wp_localize_script( 'ev-embedder', 'passedData', $dataToPass );
-	}
-
-	// add the menu to our site or network
-
-	function get_options() {
-
-		if ( $this->is_network_activated() ) {
-			return get_site_option( 'ensemble_video' );
-		}
-		return get_option( 'ensemble_video' );
-	}
-
-	// register Settings API settings
-
-	function add_media_button( $context ) {
-		$image_btn = plugins_url( '/img/ensemble-button-bw.png', __FILE__ );
-		$out       = "<style>
-		.ensemble-video-media-icon{
-        background:url($image_btn) no-repeat top left;
-        display: inline-block;
-        height: 20px;
-        margin: -3px 0 0 0;
-        vertical-align: text-top;
-        width: 20px;
+        if ( ! get_option( 'ensemble_video' ) ) {
+            if ( $this->is_network_activated() ) {
+                update_site_option( 'ensemble_video', $this->default_options() );
+            } else {
+                update_option( 'ensemble_video', $this->default_options() );
+            }
         }
-        .wp-core-ui #add-ensemble-video{
-         padding-left: 0.4em;
-        }            
-		</style>";
-		$options   = $this->get_options();
-		$version   = $options['ensemble_version'];
-		if ( version_compare( $version, '5.4.0' ) >= 0 ) {
-			$out .= '<a href="#TB_inline?width=240&height=240&inlineId=ensemble-video2" class="thickbox button" id="add-ensemble-video2" title="' . __( "Add Ensemble Video", 'ensemble-video' ) . '"><span class="ensemble-video-media-icon"></span> Add Ensemble Media</a>';
-		} else {
-			$out .= '<a href="#TB_inline?width=240&height=240&inlineId=ensemble-video" class="thickbox button" id="add-ensemble-video" title="' . __( "Add Ensemble Video", 'ensemble-video' ) . '"><span class="ensemble-video-media-icon"></span> Add Ensemble Video</a>';
-		}
+    }
 
-		return $context . $out;
-	}
+    // Check if the plugin is network activated
+    public function is_network_activated() {
+        if ( is_multisite() ) {
+            return (bool) get_site_option( 'ensemble_video_network_activated' );
+        }
 
-	function admin_menu() {
-		if ( $this->is_network_activated() ) {
-			add_submenu_page( 'settings.php', __( 'Ensemble Video Settings', 'ensemble-video' ), __( 'Ensemble Video', 'ensemble-video' ), 'manage_options', 'ensemble_video', array(
-				&$this,
-				'display_options_page'
-			) );
-		} else {
-			add_options_page( __( 'Ensemble Video Settings', 'ensemble-video' ), __( 'Ensemble Video', 'ensemble-video' ), 'manage_options', 'ensemble_video', array(
-				&$this,
-				'display_options_page'
-			) );
-		}
-	}
+        return false;
+    }
 
-	function save_network_settings() {
+    // Default plugin options
+    public function default_options() {
+        $options = array(
+            'responsive' => true,
+            'width' => 640,
+            'height' => 360,
+            'showinfo' => false,
+            'modestbranding' => true,
+            'autoplay' => false,
+            'loop' => false,
+            'rel' => false
+        );
 
-		if ( ! wp_verify_nonce( $_REQUEST['_wpnonce'], 'ensemble_video_options_group-options' ) ) {
-			wp_die( 'Sorry, you failed the nonce test.' );
-		}
-		// validate options
-		$input = $this->validate_options( $_POST['ensemble_video'] );
+        return apply_filters( 'ensemble_video_default_options', $options );
+    }
 
-		// update options
-		$this->update_options( $input );
+    // Shortcode function
+    public function ensemblevideo_shortcode( $atts ) {
+        $atts = shortcode_atts( array(
+            'id' => '',
+            'width' => '',
+            'height' => '',
+            'responsive' => '',
+            'showinfo' => '',
+            'modestbranding' => '',
+            'autoplay' => '',
+            'loop' => '',
+            'rel' => ''
+        ), $atts );
 
-		// redirect to settings page in network
-		wp_redirect(
-			add_query_arg(
-				array( 'page' => 'ensemble_video', 'updated' => 'true' ),
-				network_admin_url( 'settings.php' )
-			)
-		);
-		exit();
-	}
+        $options = get_option( 'ensemble_video' );
+        $args = array();
 
-	function validate_options( $input ) {
-		$options = $this->get_options();
+        if ( $atts['id'] ) {
+            $args['id'] = $atts['id'];
+        }
 
-		// sanitize url
-		$ensemble_url              = esc_url_raw( $input['ensemble_url'] );
-		$ensemble_institution_guid = $input['ensemble_institution_guid'];
-		$ensemble_version          = $options['ensemble_version'];
+        if ( $atts['width'] ) {
+            $args['width'] = $atts['width'];
+        } else {
+            $args['width'] = $options['width'];
+        }
 
-		// replace http urls with https, since that is all ensemble supports
-		// we are running this after our first sanitization in case they didn't enter a protocol
-		$ensemble_url = esc_url_raw( str_replace( 'http://', 'https://', $ensemble_url ), array( 'https' ) );
+        if ( $atts['height'] ) {
+            $args['height'] = $atts['height'];
+        } else {
+            $args['height'] = $options['height'];
+        }
 
-		$ensemble_url = untrailingslashit( $ensemble_url );
+        if ( $atts['responsive'] ) {
+            $args['responsive'] = true;
+        } else {
+            $args['responsive'] = $options['responsive'];
+        }
 
-		if ( empty( $ensemble_url ) ) {
-			add_settings_error( 'ensemble_video_ensemble_url', 'ensemble_invald_url', __( 'Please enter a valid Ensemble Video URL.', 'ensemble-video' ) );
-		} else {
-			$options['ensemble_url'] = $ensemble_url;
-		}
+        if ( $atts['showinfo'] ) {
+            $args['showinfo'] = true;
+        } else {
+            $args['showinfo'] = $options['showinfo'];
+        }
 
-		$urlParts          = parse_url( $ensemble_url );
-		$ensemble_base_url = $urlParts['scheme'] . '://' . $urlParts['host'];
+        if ( $atts['modestbranding'] ) {
+            $args['modestbranding'] = true;
+        } else {
+            $args['modestbranding'] = $options['modestbranding'];
+        }
 
-		$path = $urlParts['path'];
-		$path = ltrim( $path, '/' );
+        if ( $atts['autoplay'] ) {
+            $args['autoplay'] = true;
+        } else {
+            $args['autoplay'] = $options['autoplay'];
+        }
 
-		$parts                  = explode( '/', $path );
-		$ensemble_branding_name = '';
+        if ( $atts['loop'] ) {
+            $args['loop'] = true;
+        } else {
+            $args['loop'] = $options['loop'];
+        }
 
-		if ( count( $parts ) > 0 ) {
-			$ensemble_branding_name = $parts[0];
-		}
-		if ( $_SERVER['REQUEST_METHOD'] === 'POST' ) {
-			// Something posted
-			$ensemble_version          = $this->get_server_version( $ensemble_base_url );
-			$ensemble_institution_guid = $this->get_branding_guid( $ensemble_base_url, $ensemble_url );
-		}
+        if
 
-		// Validate the ensemble version that was just downloaded.
-		if ( empty( $ensemble_version ) ) {
-			$options['ensemble_version'] = 'Not verified, the Add Ensemble Media functionality is disabled.';
-			add_settings_error( 'ensemble_video_ensemble_version', 'ensemble_invald_version', __( 'Server version not verified.', 'ensemble-video' ) );
-		} else {
-			$options['ensemble_version'] = $ensemble_version;
-		}
-		// Make sure the institution id is a GUID.
-		if ( preg_match( "/^(\{)?[a-f\d]{8}(-[a-f\d]{4}){4}[a-f\d]{8}(?(1)\})$/i", $ensemble_institution_guid ) ) {
-			$options['ensemble_institution_guid'] = $ensemble_institution_guid;
-		} else {
-			add_settings_error( 'ensemble_video_ensemble_institution', 'ensemble_invalid_guid', __( 'Your ensemble branding id could not be verified, have you specified the correct server?', 'ensemble-video' ) );
-		}
-
-		$options['ensemble_branding_name'] = $ensemble_branding_name;
-		$options['ensemble_base_url']      = $ensemble_base_url;
-
-		return $options;
-	}
 
 	/**
 	 * Returns the server version by contacting the hapi/info api
